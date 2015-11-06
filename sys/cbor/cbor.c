@@ -92,6 +92,18 @@
 #endif
 
 #ifndef CBOR_NO_FLOAT
+
+/* pack to force aligned access on ARMv7 (buggy GCC) */
+#pragma GCC diagnostic error "-Wcast-align"
+typedef struct cast_align_u8 {
+    unsigned char u8;
+    union {
+        uint16_t u16;
+        uint32_t u32;
+        uint64_t u64;
+    };
+} __attribute__((packed)) cast_align_u8_t;
+
 /**
  * Convert float @p x to network format
  */
@@ -336,15 +348,15 @@ static size_t decode_int(const cbor_stream_t *s, size_t offset, uint64_t *val)
             break;
 
         case 2:
-            *val = HTONS(*((uint16_t *)&in[1]));
+            *val = HTONS(((cast_align_u8_t *)in)->u16);
             break;
 
         case 4:
-            *val = HTONL(*((uint32_t *)&in[1]));
+            *val = HTONL(((cast_align_u8_t *)in)->u32);
             break;
 
         default:
-            *val = HTONLL(*((uint64_t *)&in[1]));
+            *val = HTONLL(((cast_align_u8_t *)in)->u64);
             break;
     }
 
@@ -520,7 +532,7 @@ size_t cbor_deserialize_float(const cbor_stream_t *stream, size_t offset, float 
     unsigned char *data = &stream->data[offset];
 
     if (*data == CBOR_FLOAT32) {
-        *val = ntohf(*(uint32_t *)(data + 1));
+        *val = ntohf(((cast_align_u8_t *)data)->u32);
         return 4;
     }
 
@@ -546,7 +558,7 @@ size_t cbor_deserialize_double(const cbor_stream_t *stream, size_t offset, doubl
     unsigned char *data = &stream->data[offset];
 
     if (*data == CBOR_FLOAT64) {
-        *val = ntohd(*(uint64_t *)(data + 1));
+        *val = ntohd(((cast_align_u8_t *)data)->u64);
         return 9;
     }
 
